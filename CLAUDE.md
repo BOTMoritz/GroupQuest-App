@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GroupQuest-App is a social challenge platform where users create and join time-boxed challenges, track progress via check-ins, and earn points/badges. Built with Python, Streamlit (frontend), and SQLite (backend). Deployed via Streamlit Community Cloud (streamlit.io).
+GroupQuest-App is a social challenge platform where users create and join time-boxed challenges, track progress via check-ins, and earn points/badges. Built with Python, Streamlit (frontend), and TiDB (backend). Deployed via Streamlit Community Cloud (streamlit.io).
 
 ## Tech Stack & Constraints
 
 - **Frontend**: Streamlit
-- **Database**: SQLite (no external services — all data stays local in a `.db` file)
+- **Database**: TiDB (MySQL-compatible distributed SQL, TiDB Cloud Serverless)
 - **Deployment**: GitHub → Streamlit Community Cloud
-- **No external APIs or storage services**
+- **DB credentials**: stored in `.streamlit/secrets.toml` locally; configured as Streamlit Cloud Secrets in production — never committed
 
 ## Running the App
 
@@ -19,33 +19,65 @@ GroupQuest-App is a social challenge platform where users create and join time-b
 # Install dependencies
 pip install -r requirements.txt
 
-# Run locally
+# Create .streamlit/secrets.toml with TiDB connection details (see below)
 streamlit run app.py
 ```
+
+### TiDB connection secrets (`/.streamlit/secrets.toml`)
+
+```toml
+[tidb]
+host     = "<your-tidb-host>"
+port     = 4000
+user     = "<your-user>"
+password = "<your-password>"
+database = "groupquest"
+ssl_ca   = ""          # path to CA cert if required by TiDB Cloud
+```
+
+Access in code via `st.secrets["tidb"]`.
 
 ## Project Structure (expected)
 
 ```
 app.py              # Streamlit entry point
-database.py         # SQLite connection, schema init, all DB helpers
-requirements.txt    # Python dependencies (streamlit, etc.)
+database.py         # TiDB connection, schema init, all DB helpers
+requirements.txt    # Python dependencies (streamlit, PyMySQL, etc.)
+pages/              # Optional multi-page Streamlit modules
 ```
 
 ## Architecture
 
 The app follows a simple two-layer structure:
 
-- **`database.py`** owns all SQLite logic: schema creation, connection management, and query functions. Schema is initialized on first run via `CREATE TABLE IF NOT EXISTS`. No ORM — raw `sqlite3` with parameterized queries.
-- **`app.py`** (and optional page modules) owns all Streamlit UI. It calls functions from `database.py` directly — no intermediate service layer.
+- **`database.py`** owns all TiDB logic: connection management (via `PyMySQL`), schema creation, and query functions. Schema is initialized on first run via `CREATE TABLE IF NOT EXISTS`. No ORM — raw SQL with parameterized queries. Connections are opened per request using `st.cache_resource` for the connection pool.
+- **`app.py`** (and optional `pages/` modules) owns all Streamlit UI. It calls functions from `database.py` directly — no intermediate service layer.
 
 Streamlit's session state (`st.session_state`) is used for login state and ephemeral UI state between reruns.
 
 ## Key Domain Concepts
 
-- **Challenge**: has title, rules, duration, visibility (public/group), created by a user
+- **Challenge**: has title, rules, duration, visibility (public/group), created by a user; can be duplicated, prioritized, grouped, and filtered
 - **Check-in**: a progress entry (text/photo) submitted by a participant for a challenge
 - **Points / Badges / Level**: awarded based on check-in consistency and milestones
 - **Leaderboard / Social Feed**: derived views over check-ins and points
+- **Group**: a named collection of users who share challenges; users can create or join groups
+- **Clipboard**: a personal and community pinboard for pinning active challenges and tasks
+- **Admin**: privileged role for user management, moderation, blacklists, and usage statistics
+
+## User Story Areas (GitHub Milestones)
+
+| Area | Assigned |
+|------|----------|
+| Authentifizierung & Account | — |
+| Challenge-Verwaltung | — |
+| Fortschritt & Check-ins | Nico |
+| Community & Sharing | Nico |
+| Gamification | Jonas |
+| Personalisierung & UX | Jonas |
+| Benachrichtigungen | Jonas |
+| Administration | — |
+| Technisch / Sicherheit | — |
 
 ## Development Workflow
 
