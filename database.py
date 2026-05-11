@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import secrets
 import pymysql
 import pymysql.cursors
@@ -8,17 +9,25 @@ import streamlit as st
 from datetime import datetime, timedelta
 
 
+def _build_ssl(cfg) -> dict | None:
+    ca = cfg.get("ssl_ca", "")
+    if ca and os.path.exists(ca):
+        return {"ca": ca}
+    # TiDB Cloud requires TLS — enable it without pinning a specific CA file
+    # so the OS trust store is used (works on macOS and Linux)
+    return {}
+
+
 @st.cache_resource
 def _open_connection():
     cfg = st.secrets["tidb"]
-    ssl = {"ca": cfg["ssl_ca"]} if cfg.get("ssl_ca") else None
     return pymysql.connect(
         host=cfg["host"],
         port=int(cfg["port"]),
         user=cfg["user"],
         password=cfg["password"],
         database=cfg["database"],
-        ssl=ssl,
+        ssl=_build_ssl(cfg),
         autocommit=True,
         cursorclass=pymysql.cursors.DictCursor,
     )
@@ -36,7 +45,6 @@ def get_connection():
 
 def init_db():
     cfg = st.secrets["tidb"]
-    ssl = {"ca": cfg["ssl_ca"]} if cfg.get("ssl_ca") else None
     db_name = cfg["database"]
 
     bootstrap = pymysql.connect(
@@ -44,7 +52,7 @@ def init_db():
         port=int(cfg["port"]),
         user=cfg["user"],
         password=cfg["password"],
-        ssl=ssl,
+        ssl=_build_ssl(cfg),
         autocommit=True,
         cursorclass=pymysql.cursors.DictCursor,
     )
